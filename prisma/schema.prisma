@@ -1,0 +1,23 @@
+// Prisma schema for ServiceGrid — PostgreSQL (Supabase) · deploy to Vercel.
+// Mirrors src/types/index.ts 1:1. Run: npx prisma migrate dev && npx prisma db seed.
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum Role { CUSTOMER OPS_MANAGER TECHNICIAN ADMIN }
+enum Priority { P1 P2 P3 P4 }
+enum RequestStatus { CREATED VALIDATED PENDING_APPROVAL APPROVED ASSIGNED IN_PROGRESS PENDING_VERIFICATION CLOSED EXCEPTION }
+enum ExceptionType { TECH_DROPOUT PART_UNAVAILABLE SLA_BREACH }
+
+model Site { id String @id @default(cuid()); name String; code String @unique; lat Float; lng Float; address String; machines Machine[]; parts PartInventory[]; techs Technician[]; requests ServiceRequest[] }
+model Machine { id String @id @default(cuid()); code String @unique; name String; siteId String; site Site @relation(fields: [siteId], references: [id]); status String; eligible Boolean; warrantyActive Boolean; contractActive Boolean; skills String[]; requests ServiceRequest[] }
+model User { id String @id @default(cuid()); name String; email String @unique; role Role; siteId String?; passwordHash String; techProfile Technician?; requests ServiceRequest[] @relation("CreatedBy") }
+model Technician { id String @id @default(cuid()); userId String @unique; user User @relation(fields: [userId], references: [id]); name String; siteId String; site Site @relation(fields: [siteId], references: [id]); skills String[]; certifications String[]; lat Float; lng Float; online Boolean @default(true); currentLoad Float @default(0); availability Float @default(1); assignments Assignment[] }
+model PartInventory { id String @id @default(cuid()); sku String; name String; qty Int; reservedQty Int @default(0); siteId String; site Site @relation(fields: [siteId], references: [id]); unitCost Float; @@unique([sku, siteId]) }
+model ServiceRequest { id String @id @default(cuid()); code String @unique; machineId String; machine Machine @relation(fields: [machineId], references: [id]); siteId String; site Site @relation(fields: [siteId], references: [id]); title String; description String; priority Priority; requiredSkills String[]; requiredParts Json; status RequestStatus @default(CREATED); slaDeadline DateTime; createdBy String; creator User @relation("CreatedBy", fields: [createdBy], references: [id]); createdAt DateTime @default(now()); validationReport Json?; reservations Reservation[]; assignments Assignment[]; logs TaskLog[]; attachments Attachment[]; exceptions ExceptionFlag[] }
+model Reservation { id String @id @default(cuid()); requestId String; request ServiceRequest @relation(fields: [requestId], references: [id]); sku String; siteId String; qty Int; createdAt DateTime @default(now()) }
+model Assignment { id String @id @default(cuid()); requestId String; request ServiceRequest @relation(fields: [requestId], references: [id]); technicianId String; tech Technician @relation(fields: [technicianId], references: [id]); score Float; breakdown Json; explanation String; active Boolean @default(true); createdAt DateTime @default(now()) }
+model TaskLog { id String @id @default(cuid()); requestId String; request ServiceRequest @relation(fields: [requestId], references: [id]); authorId String; authorName String; text String; kind String; at DateTime @default(now()) }
+model Attachment { id String @id @default(cuid()); requestId String; request ServiceRequest @relation(fields: [requestId], references: [id]); name String; url String; note String?; at DateTime @default(now()) }
+model ExceptionFlag { id String @id @default(cuid()); requestId String; request ServiceRequest @relation(fields: [requestId], references: [id]); type ExceptionType; message String; resolved Boolean @default(false); resolvedBy String?; createdAt DateTime @default(now()); suggestion String?; candidateId String? }
+model Notification { id String @id @default(cuid()); toUserId String?; toRole String?; title String; body String; at DateTime @default(now()); read Boolean @default(false) }
+model AuditLog { id String @id @default(cuid()); actor String; action String; entity String; entityId String; payload Json; prevHash String; hash String; at DateTime @default(now()) }
